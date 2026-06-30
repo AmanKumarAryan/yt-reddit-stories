@@ -41,9 +41,9 @@ MINECRAFT_CREDITS = os.getenv("MINECRAFT_CREDITS", "perpexior")
 
 # ─── Pipeline Config ──────────────────────────────────────────────
 TTS_VOICE = os.getenv("TTS_VOICE", "en-US-BrianNeural")
-TARGET_DURATION_MINUTES = int(os.getenv("TARGET_VIDEO_DURATION_MINUTES", "3"))
-MAX_STORY_WORDS = int(os.getenv("MAX_STORY_WORDS", "800"))
-MIN_STORY_WORDS = int(os.getenv("MIN_STORY_WORDS", "200"))
+TARGET_DURATION_MINUTES = int(os.getenv("TARGET_VIDEO_DURATION_MINUTES", "10"))
+MAX_STORY_WORDS = int(os.getenv("MAX_STORY_WORDS", "5000"))
+MIN_STORY_WORDS = int(os.getenv("MIN_STORY_WORDS", "1000"))
 
 # ─── Paths ────────────────────────────────────────────────────────
 DATA_DIR = PROJECT_ROOT / "data"

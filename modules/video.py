@@ -1,20 +1,126 @@
 """
-video.py — Download high-quality Minecraft parkour video from YouTube.
+video.py — Provide Minecraft parkour background video.
 
 Strategy:
-  1. Target CC BY / free-to-use Minecraft parkour channels
-  2. Download the best available quality (up to 1080p)
-  3. Trim to match voiceover duration
+  1. Check assets/ folder for pre-downloaded high-quality clips
+  2. If found, concatenate multiple clips (random segments) to reach target duration
+  3. If not found, download from YouTube (fallback)
   4. Credit the source (requires attribution in video description)
 """
 
 import logging
+import random
 import subprocess
+import tempfile
+import shutil
 from pathlib import Path
 
 from modules.config import MINECRAFT_VIDEO_URL, MINECRAFT_CREDITS, OUTPUT_DIR
 
 logger = logging.getLogger(__name__)
+
+
+def _find_assets_videos() -> list[Path]:
+    """Find pre-downloaded Minecraft parkour videos in assets/ folder."""
+    assets_dir = Path(__file__).resolve().parent.parent / "assets"
+    if not assets_dir.exists():
+        return []
+    videos = sorted(assets_dir.glob("*.mp4"))
+    return videos
+
+
+def _concat_assets_clips(assets_videos: list[Path], target_duration_sec: float, output_path: Path) -> Path:
+    """
+    Concatenate multiple asset clips to reach target_duration_sec.
+
+    Picks random segments from random clips, loops if needed.
+    Uses stream copy (no re-encode) for speed.
+    """
+    # Get durations of all assets
+    video_durations = {}
+    for v in assets_videos:
+        try:
+            video_durations[v] = _get_video_duration(v)
+        except Exception as e:
+            logger.warning("Could not get duration for %s: %s", v.name, e)
+
+    if not video_durations:
+        raise RuntimeError("No valid assets found with readable durations")
+
+    total_available = sum(video_durations.values())
+    logger.info("Assets: %d files, %.0f sec total available", len(video_durations), total_available)
+
+    # How many times we need to loop through all clips
+    times_through = max(1, int(target_duration_sec / total_available) + 1)
+
+    # Build list of segments to extract
+    segments = []  # list of (video_path, segment_length)
+    remaining = target_duration_sec
+
+    for _ in range(times_through):
+        if remaining <= 0:
+            break
+        # Randomize order each pass
+        shuffled = list(video_durations.keys())
+        random.shuffle(shuffled)
+
+        for video in shuffled:
+            if remaining <= 0:
+                break
+            dur = video_durations[video]
+            seg_len = min(remaining, dur)
+            segments.append((video, seg_len))
+            remaining -= seg_len
+
+    logger.info("Target: %.0f sec → %d segments to concatenate", target_duration_sec, len(segments))
+
+    # Trim each segment with stream copy
+    tmp_dir = Path(tempfile.mkdtemp(prefix="bg_concat_"))
+    segment_files = []
+
+    try:
+        for i, (video, seg_len) in enumerate(segments):
+            seg_path = tmp_dir / f"seg_{i:04d}.mp4"
+            dur = video_durations[video]
+            max_start = max(0, dur - seg_len - 2)
+            start_offset = random.uniform(5, max_start) if max_start > 5 else 0
+
+            cmd = [
+                "ffmpeg", "-y",
+                "-ss", str(start_offset),
+                "-i", str(video),
+                "-t", str(seg_len),
+                "-c", "copy",
+                "-avoid_negative_ts", "1",
+                str(seg_path),
+            ]
+            subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=120)
+            segment_files.append(seg_path)
+
+        # Create concat file list
+        concat_list = tmp_dir / "concat.txt"
+        with open(concat_list, "w") as f:
+            for seg in segment_files:
+                f.write(f"file '{seg}'\n")
+
+        # Concatenate all segments (stream copy, no re-encode)
+        cmd_concat = [
+            "ffmpeg", "-y",
+            "-f", "concat",
+            "-safe", "0",
+            "-i", str(concat_list),
+            "-c", "copy",
+            "-movflags", "+faststart",
+            str(output_path),
+        ]
+        subprocess.run(cmd_concat, check=True, capture_output=True, text=True, timeout=300)
+
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    final_duration = _get_video_duration(output_path)
+    logger.info("Background video ready: %s (%.1f sec, %d segments)", output_path, final_duration, len(segments))
+    return output_path
 
 
 def download_background_video(
@@ -23,21 +129,12 @@ def download_background_video(
     video_url: str | None = None,
 ) -> Path:
     """
-    Download a Minecraft parkour video from YouTube, trimmed to target duration.
+    Provide a Minecraft parkour background video trimmed to target duration.
 
-    Args:
-        target_duration_sec: Length of video needed (seconds).
-        output_path: Where to save the final MP4.
-        video_url: YouTube URL of the Minecraft video.
-                   Defaults to MINECRAFT_VIDEO_URL from config.
-
-    Returns:
-        Path to the downloaded and trimmed MP4.
-
-    Note:
-        - Uses yt-dlp for downloading
-        - Downloads best video (up to 1080p) + best audio
-        - Selects a random-ish segment from the middle of the source video
+    Priority:
+      1. Concatenate random segments from assets/*.mp4 (pre-downloaded high-quality)
+         to reach target_duration_sec. Loops clips if total duration < target.
+      2. Download from YouTube via yt-dlp (fallback).
     """
     from modules.config import MINECRAFT_VIDEO_URL as DEFAULT_URL
 
@@ -49,19 +146,23 @@ def download_background_video(
     output_path = output_path.resolve()
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    raw_path = output_path.with_suffix(".raw.mp4")
+    # ─── Priority 1: Use assets/ folder (multi-clip concat) ─
+    assets_videos = _find_assets_videos()
+    if assets_videos:
+        return _concat_assets_clips(assets_videos, target_duration_sec, output_path)
 
-    # Step 1: Download the video (first 5 minutes to have buffer)
-    logger.info("Downloading Minecraft video from: %s", video_url)
+    # ─── Priority 2: Download from YouTube ───────────────────
+    logger.warning("No assets found in assets/ folder — downloading from YouTube (quality may be lower)")
+    logger.info("To improve quality, pre-download videos into assets/ folder")
+    logger.info("Downloading from: %s", video_url)
     logger.info("Target duration: %.0f seconds", target_duration_sec)
 
-    # Add a 30-second buffer on each side for trimming
-    download_duration = min(target_duration_sec + 60, 300)  # Max 5 min
+    raw_path = output_path.with_suffix(".raw.mp4")
+    download_duration = min(target_duration_sec + 60, 300)
 
-    # Try primary URL first, then fallback
     urls_to_try = [
         video_url,
-        "https://www.youtube.com/watch?v=0tx7sKsyuOg",  # Shorter fallback (7:32)
+        "https://www.youtube.com/watch?v=0tx7sKsyuOg",
     ]
 
     download_success = False
@@ -72,7 +173,8 @@ def download_background_video(
         cmd_dl = [
             "yt-dlp",
             "-o", str(raw_path),
-            "--format", "best[height<=720]",
+            "--format", "bestvideo[height<=1080][vcodec^=avc1]+bestaudio[ext=m4a]/best[height<=1080]",
+            "--merge-output-format", "mp4",
             "--download-sections", f"*0-{min(download_duration, 180)}",
             "--force-keyframes-at-cuts",
             "--no-playlist",
@@ -85,51 +187,34 @@ def download_background_video(
             if raw_path.exists() and raw_path.stat().st_size > 100000:
                 download_success = True
                 break
-        except subprocess.TimeoutExpired:
-            logger.warning("Download timed out for %s", attempt_url)
-            # Check if partial file exists
+        except (subprocess.TimeoutExpired, subprocess.CalledProcessError):
             if raw_path.exists() and raw_path.stat().st_size > 100000:
                 download_success = True
                 break
-        except subprocess.CalledProcessError as e:
-            logger.warning("yt-dlp failed for %s: %s", attempt_url, e.stderr[-300:])
             continue
 
     if not download_success:
         raise RuntimeError("Failed to download video from all sources")
 
-    if not raw_path.exists():
-        raise RuntimeError("Failed to download video from all sources")
-
-    # Step 2: Trim to exact target duration (from a random-ish offset)
     raw_duration = _get_video_duration(raw_path)
-    logger.info("Downloaded video duration: %.1f sec", raw_duration)
-
-    # Start from 30 seconds in (skip intros) or proportional
     start_offset = min(30, max(0, raw_duration - target_duration_sec - 10))
 
     cmd_trim = [
-        "ffmpeg",
-        "-y",
+        "ffmpeg", "-y",
         "-ss", str(start_offset),
         "-i", str(raw_path),
         "-t", str(target_duration_sec),
-        "-c:v", "libx264",
-        "-preset", "fast",
-        "-c:a", "aac",
+        "-c", "copy",
         "-movflags", "+faststart",
         str(output_path),
     ]
+    subprocess.run(cmd_trim, check=True, capture_output=True, text=True, timeout=60)
 
-    subprocess.run(cmd_trim, check=True, capture_output=True, text=True, timeout=120)
-
-    # Clean up raw download
     if raw_path.exists():
         raw_path.unlink()
 
     final_duration = _get_video_duration(output_path)
     logger.info("Background video ready: %s (%.1f sec)", output_path, final_duration)
-
     return output_path
 
 

@@ -14,7 +14,7 @@ from modules.config import GROQ_API_KEY
 logger = logging.getLogger(__name__)
 
 
-def _call_groq(prompt: str, model: str = "mixtral-8x7b-32768") -> Optional[str]:
+def _call_groq(prompt: str, model: str = "llama-3.3-70b-versatile", max_tokens: int = 500) -> Optional[str]:
     """
     Call the Groq API with a prompt and return the response text.
     Falls back to local rule-based generation if API key is missing.
@@ -41,7 +41,7 @@ def _call_groq(prompt: str, model: str = "mixtral-8x7b-32768") -> Optional[str]:
                 {"role": "user", "content": prompt},
             ],
             temperature=0.8,
-            max_tokens=500,
+            max_tokens=max_tokens,
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
@@ -127,6 +127,45 @@ Keep it under 500 words. Make it natural, not salesy.
         desc += f"\\n\\nCredits:\\n{credits}"
 
     return desc
+
+
+def expand_story_for_youtube(original_title: str, original_body: str, target_minutes: int = 10) -> str:
+    """
+    Use Groq to expand a short Reddit story into a long, engaging YouTube narration.
+    Target: ~150 words per minute * target_minutes
+    """
+    target_words = target_minutes * 150  # 150 words/min at speaking pace
+    
+    prompt = f"""
+You are a master storyteller writing a narrated story for YouTube. 
+Take the following short Reddit post and EXPAND it into a much longer, more detailed, emotionally rich story.
+
+Your job:
+- Write in FIRST PERSON ("I" not "he/she")
+- Keep the original plot and events but ADD scenes, descriptions, internal monologue, and emotional depth
+- Add vivid sensory details (sights, sounds, textures, smells)
+- Expand each moment into a full scene
+- Include pacing: build tension, have emotional peaks, and a satisfying resolution
+- The final length should be approximately {target_words} words (for a {target_minutes}-minute video at 150 words/min)
+
+ORIGINAL STORY:
+Title: {original_title}
+{original_body}
+
+Write ONLY the expanded narration text. No headers, no timestamps, no instructions.
+Just pure first-person storytelling. Make it gripping and emotional.
+"""
+    
+    result = _call_groq(prompt, model="llama-3.3-70b-versatile", max_tokens=4000)
+    
+    if result:
+        expanded = result.strip()
+        word_count = len(expanded.split())
+        logger.info("Story expanded: %d words (%d min estimated)", word_count, int(word_count / 150))
+        return expanded
+    
+    logger.warning("Story expansion failed — returning original")
+    return original_body
 
 
 def generate_thumbnail_prompt(story_title: str, story_body: str) -> str:

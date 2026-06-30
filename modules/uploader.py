@@ -156,7 +156,7 @@ def _authenticate():
         with open(token_path, "rb") as f:
             credentials = pickle.load(f)
 
-    # If no valid token, use refresh token
+    # If no valid token, use refresh token to get a fresh access token
     if not credentials or not credentials.valid:
         if credentials and credentials.expired and credentials.refresh_token:
             credentials.refresh(Request())
@@ -173,10 +173,14 @@ def _authenticate():
                 client_secret=client_config["client_secret"],
                 scopes=["https://www.googleapis.com/auth/youtube.upload"],
             )
+            # Must actually call refresh to get an access token
+            credentials.refresh(Request())
 
-        # Save token
+        # Save token for next run
         with open(token_path, "wb") as f:
             pickle.dump(credentials, f)
+
+        logger.info("YouTube credentials refreshed successfully")
 
     return credentials
 

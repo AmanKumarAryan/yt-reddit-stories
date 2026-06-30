@@ -44,32 +44,42 @@ def generate_thumbnail(
     output_path = output_path.resolve()
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Cloudflare Flux API endpoint
+    # Cloudflare Flux API endpoint (using flux-2-dev for better quality)
     url = (
         f"https://api.cloudflare.com/client/v4/accounts/{CF_ACCOUNT_ID}"
-        f"/ai/run/@cf/black-forest-labs/flux-1-schnell-fp8"
+        f"/ai/run/@cf/black-forest-labs/flux-2-dev"
     )
 
-    payload = json.dumps({"prompt": prompt}).encode()
+    import uuid
+    boundary = f"----WebKitFormBoundary{uuid.uuid4().hex[:16]}"
+
+    # Build multipart form-data body for Flux 2 dev
+    body_parts = []
+    for key, value in [("prompt", prompt), ("steps", "25"), ("width", "1024"), ("height", "1024")]:
+        part = f"--{boundary}\r\n"
+        part += f'Content-Disposition: form-data; name="{key}"\r\n\r\n'
+        part += f"{value}\r\n"
+        body_parts.append(part)
+    body_parts.append(f"--{boundary}--\r\n")
+    payload = "".join(body_parts).encode("utf-8")
 
     headers = {
         "Authorization": f"Bearer {CF_FLUX_API_TOKEN}",
-        "Content-Type": "application/json",
+        "Content-Type": f"multipart/form-data; boundary={boundary}",
     }
 
-    logger.info("Generating thumbnail via Cloudflare Flux...")
+    logger.info("Generating thumbnail via Cloudflare Flux 2 Dev...")
     logger.debug("Prompt: %s", prompt[:200])
 
     try:
         req = urllib.request.Request(url, data=payload, headers=headers)
-        with urllib.request.urlopen(req, timeout=60) as resp:
+        with urllib.request.urlopen(req, timeout=120) as resp:
             data = json.loads(resp.read().decode())
 
         if not data.get("success"):
             logger.error("Cloudflare Flux API error: %s", data.get("errors"))
             return None
 
-        # The API returns base64-encoded image
         result = data.get("result", {})
         image_b64 = result.get("image")
 

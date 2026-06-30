@@ -6,10 +6,11 @@ Full pipeline: Reddit Story → Script → Voiceover → Background Video →
               Thumbnail → Merge → Upload
 
 Usage:
-    python main.py                    # Full pipeline
-    python main.py --dry-run          # Fetch story only, don't upload
-    python main.py --skip-upload      # Generate video but don't upload
-    python main.py --story-id XYZ     # Re-use a specific story ID
+    python main.py                            # Full pipeline (10 min)
+    python main.py --dry-run                  # Fetch story only, don't upload
+    python main.py --skip-upload              # Generate video but don't upload
+    python main.py --target-minutes 5         # Make a 5-minute video
+    python main.py --story-id XYZ             # Re-use a specific story ID
 """
 
 import argparse
@@ -62,6 +63,7 @@ def run_pipeline(
     dry_run: bool = False,
     skip_upload: bool = False,
     story_id: str | None = None,
+    target_minutes: int = 10,
 ) -> bool:
     """
     Execute the full pipeline.
@@ -139,9 +141,9 @@ def run_pipeline(
     if timing_path.exists():
         with open(timing_path) as f:
             timing = _json.load(f)
-        target_duration = timing.get("total_duration_sec", TARGET_DURATION_MINUTES * 60)
+        target_duration = timing.get("total_duration_sec", target_minutes * 60)
     else:
-        target_duration = TARGET_DURATION_MINUTES * 60
+        target_duration = target_minutes * 60
 
     logger.info("Target video duration: %.0f seconds", target_duration)
 
@@ -235,7 +237,7 @@ def run_pipeline(
     logger.info("  Duration: %.0f sec", target_duration)
     logger.info("=" * 60)
 
-    # ─── Step 7: Upload to YouTube ──────────────────────────────
+    # ─── Step 8: Upload to YouTube ──────────────────────────────
     if skip_upload:
         logger.info("SKIP UPLOAD: --skip-upload flag set.")
         # Still mark as used so we don't re-pick it
@@ -286,6 +288,12 @@ def main() -> int:
         help="Re-process a specific story ID (must be in topics_used.json).",
     )
     parser.add_argument(
+        "--target-minutes",
+        type=int,
+        default=10,
+        help="Target video length in minutes (default: 10).",
+    )
+    parser.add_argument(
         "-v", "--verbose",
         action="store_true",
         help="Enable debug logging.",
@@ -298,6 +306,7 @@ def main() -> int:
         dry_run=args.dry_run,
         skip_upload=args.skip_upload,
         story_id=args.story_id,
+        target_minutes=args.target_minutes,
     )
 
     return 0 if success else 1
