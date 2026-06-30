@@ -1,0 +1,21 @@
+# YouTube Reddit Stories Pipeline
+
+# === Core ===
+python-dotenv>=1.0.0
+
+# === Reddit ===
+praw>=7.7.0
+
+# === Voice (TTS) ===
+edge-tts>=6.1.0
+
+# === Background Video ===
+yt-dlp>=2023.0.0
+
+# === Groq (Title/Description/Prompt) ===
+groq>=0.4.0
+
+# === YouTube Upload ===
+google-api-python-client>=2.100.0
+google-auth-httplib2>=0.2.0
+google-auth-oauthlib>=1.2.0

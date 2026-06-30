@@ -1,0 +1,40 @@
+# Environment
+.env
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Output files
+output/
+data/*.json
+!data/.gitkeep
+
+# Videos & audio
+*.mp4
+*.mp3
+*.wav
+*.webm
+*.mkv
+
+# Thumbnails
+*.png
+*.jpg
+*.jpeg
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git LFS
+*.mp4 filter=lfs diff=lfs merge=lfs -text
