@@ -145,108 +145,59 @@ def _fetch_via_api() -> list[dict]:
     return candidates
 
 
-# ─── Fetch via scraping (old.reddit.com) ──────────────────────────
+# ─── Seed story for offline/local testing ─────────────────────────
+SEED_STORY = {
+    "id": "seed_story_001",
+    "title": "I spent 5 years pretending to be happy. Here's what broke me.",
+    "body": (
+        "I was 22 when I realized I had been living my life for everyone else. "
+        "My parents wanted me to be a doctor, so I studied medicine. "
+        "I hated every second of it. The blood, the hours, the pressure. "
+        "But I smiled through it all. I smiled at graduation. "
+        "I smiled at my first job. I smiled when my father said he was proud of me. "
+        "But inside, I was dying. Every morning I would stare at the ceiling "
+        "and pray I wouldn't have to get up. "
+        "The breaking point came on a Tuesday. I was in the middle of a 36-hour shift. "
+        "A patient coded. We lost him. His wife was crying in the hallway. "
+        "And I felt nothing. Absolutely nothing. "
+        "That's when I knew something was wrong. I went to the bathroom, "
+        "locked the door, and sat on the floor for 20 minutes. "
+        "I couldn't feel joy, sadness, anger, or fear. I was empty. "
+        "I quit medical residency the next week. My parents haven't spoken to me since. "
+        "That was three years ago. Today I run a small bookshop in a town "
+        "where nobody knows me. I make barely enough to survive. "
+        "But for the first time in my life, I feel something. "
+        "It's not happiness yet. But it's real. And that's enough for now."
+    ),
+    "ups": 15200,
+    "comments": 843,
+    "subreddit": "TrueOffMyChest",
+    "url": "https://reddit.com/r/TrueOffMyChest/comments/seed_story",
+    "word_count": 220,
+    "score": 0.0,
+}
+
+
 def _fetch_via_scrape() -> list[dict]:
-    """Fallback: scrape old.reddit.com's top posts."""
-    import urllib.request
-    from html.parser import HTMLParser
-
-    class PostParser(HTMLParser):
-        """Minimal parser to extract post data from old.reddit.com listings."""
-
-        def __init__(self):
-            super().__init__()
-            self.candidates = []
-            self._current = {}
-            self._in_entry = False
-            self._in_title = False
-            self._tag_stack = []
-            self._data_buffer = []
-            self._div_class = ""
-            self._in_body = False
-            self._body_text = []
-            self._rows = []
-
-        def handle_starttag(self, tag, attrs):
-            attrs_dict = dict(attrs)
-            self._tag_stack.append(tag)
-            classes = attrs_dict.get("class", "")
-
-            if tag == "div" and "entry" in classes:
-                self._in_entry = True
-                self._current = {}
-                self._body_text = []
-
-            if self._in_entry and tag == "a" and "title" in classes:
-                self._in_title = True
-                self._current["title"] = ""
-                self._data_buffer = []
-
-            if tag == "div" and "usertext-body" in classes:
-                self._in_body = True
-                self._data_buffer = []
-
-        def handle_endtag(self, tag):
-            if self._tag_stack:
-                self._tag_stack.pop()
-            if tag == "a" and self._in_title:
-                self._in_title = False
-                self._current["title"] = "".join(self._data_buffer).strip()
-            if tag == "div" and self._in_body:
-                self._in_body = False
-                body = "".join(self._data_buffer).strip()
-                # Clean up HTML entities and whitespace
-                body = re.sub(r"<[^>]+>", "", body)
-                body = body.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
-                body = re.sub(r"\s+", " ", body).strip()
-                if body:
-                    self._current["body"] = body
-                    self._current["word_count"] = len(body.split())
-                    # Commit candidate if it has body and reasonable length
-                    if MIN_STORY_WORDS <= self._current.get("word_count", 0) <= MAX_STORY_WORDS:
-                        self.candidates.append(self._current.copy())
-
-        def handle_data(self, data):
-            if self._in_title or self._in_body:
-                self._data_buffer.append(data)
-
-            # Also try to find rank/score/comments from the flat listing structure
-            if self._tag_stack and self._tag_stack[-1] in ("span", "a"):
-                pass  # We'll parse more below
-
-    candidates = []
+    """
+    Fallback: load a seed story for testing when no Reddit API credentials are available.
+    
+    For production, set REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET in .env
+    to fetch real Reddit stories via PRAW.
+    """
     used_ids = _load_used_ids()
+    candidates = []
 
-    for sub_name in STORY_SUBREDDITS:
-        url = f"https://old.reddit.com/r/{sub_name}/top/?sort=top&t=week"
-        try:
-            req = urllib.request.Request(
-                url,
-                headers={"User-Agent": REDDIT_USER_AGENT},
-            )
-            with urllib.request.urlopen(req, timeout=15) as resp:
-                html = resp.read().decode("utf-8", errors="replace")
-
-            parser = PostParser()
-            parser.feed(html)
-
-            for c in parser.candidates:
-                c["subreddit"] = sub_name
-                if c.get("id") not in used_ids:
-                    # Extract ID from any link: not perfect via pure scraping
-                    # Assign a unique key: sub_name + hash of title
-                    c["id"] = f"scrape_{sub_name}_{hash(c['title']) % 10000000}"
-                    c["ups"] = 0  # Can't easily scrape without full parsing
-                    c["comments"] = 0
-                    c["url"] = url
-                    candidates.append(c)
-
-            logger.info("Scraped %d candidates from r/%s", len(parser.candidates), sub_name)
-            time.sleep(1.0)
-
-        except Exception as e:
-            logger.warning("Failed to scrape r/%s: %s", sub_name, e)
-            continue
+    if SEED_STORY["id"] not in used_ids:
+        logger.info("No Reddit API credentials — using seed story for testing")
+        logger.info("Set REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET in .env for live Reddit stories")
+        candidates.append(dict(SEED_STORY))
+    else:
+        logger.warning(
+            "Seed story already used and no Reddit API credentials configured. "
+            "Add REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET to .env "
+            "or delete data/topics_used.json to reset."
+        )
 
     return candidates
 

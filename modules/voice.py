@@ -105,7 +105,7 @@ def generate_voiceover(
         "Generating TTS for %d segments (%d words) using voice: %s",
         len(segments),
         len(full_text.split()),
-        voice,
+        TTS_VOICE,
     )
 
     # Run async TTS
