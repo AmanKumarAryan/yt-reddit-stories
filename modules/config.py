@@ -41,9 +41,19 @@ MINECRAFT_CREDITS = os.getenv("MINECRAFT_CREDITS", "perpexior")
 
 # ─── Pipeline Config ──────────────────────────────────────────────
 TTS_VOICE = os.getenv("TTS_VOICE", "en-US-BrianNeural")
-TARGET_DURATION_MINUTES = int(os.getenv("TARGET_VIDEO_DURATION_MINUTES", "10"))
-MAX_STORY_WORDS = int(os.getenv("MAX_STORY_WORDS", "5000"))
-MIN_STORY_WORDS = int(os.getenv("MIN_STORY_WORDS", "1000"))
+def _env_int(key: str, default: str) -> int:
+    """Get an env var as int, returning default if missing or empty."""
+    val = os.environ.get(key)
+    if not val:
+        return int(default)
+    try:
+        return int(val)
+    except (ValueError, TypeError):
+        return int(default)
+
+TARGET_DURATION_MINUTES = _env_int("TARGET_VIDEO_DURATION_MINUTES", "10")
+MAX_STORY_WORDS = _env_int("MAX_STORY_WORDS", "5000")
+MIN_STORY_WORDS = _env_int("MIN_STORY_WORDS", "1000")
 
 # ─── Paths ────────────────────────────────────────────────────────
 DATA_DIR = PROJECT_ROOT / "data"
