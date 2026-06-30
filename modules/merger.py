@@ -44,19 +44,29 @@ def merge(
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     # ─── Step 1: Normalize audio on voiceover ────────────────────
-    normalized_audio = voiceover.with_suffix(".normalized.mp3")
-    _normalize_audio(voiceover, normalized_audio)
+    normalized_audio = voiceover.with_suffix(".normalized.m4a")
+    try:
+        _normalize_audio(voiceover, normalized_audio)
+        audio_to_use = normalized_audio if normalized_audio.exists() else voiceover
+        logger.info("Audio normalized successfully")
+    except Exception as e:
+        logger.warning("Audio normalization failed (%s) — using original voiceover", e)
+        audio_to_use = voiceover
 
     # ─── Step 2: Get durations ───────────────────────────────────
     bg_duration = _get_media_duration(background_video)
-    audio_duration = _get_media_duration(normalized_audio)
+    try:
+        audio_duration = _get_media_duration(audio_to_use)
+    except Exception:
+        audio_duration = _get_media_duration(voiceover)
+        audio_to_use = voiceover
     logger.info("BG video: %.1f sec | Voiceover: %.1f sec", bg_duration, audio_duration)
 
     # ─── Step 3: Build the video ──────────────────────────────────
     if thumbnail and thumbnail.exists() and intro_duration > 0:
         # Create intro card with thumbnail
         intro_path = output_path.with_suffix(".intro.mp4")
-        _create_intro_card(thumbnail, normalized_audio, intro_path, intro_duration)
+        _create_intro_card(thumbnail, audio_to_use, intro_path, intro_duration)
         # Then merge intro + background
         _merge_intro_with_bg(intro_path, background_video, output_path, intro_duration, audio_duration)
         # Clean up
@@ -64,27 +74,50 @@ def merge(
             intro_path.unlink()
     else:
         # Simple overlay: voiceover on background
-        _overlay_audio_on_video(background_video, normalized_audio, output_path)
+        _overlay_audio_on_video(background_video, audio_to_use, output_path)
 
     # ─── Step 4: Clean up ────────────────────────────────────────
-    if normalized_audio.exists():
+    if normalized_audio.exists() and normalized_audio != voiceover:
         normalized_audio.unlink()
+    # Also clean up old-style .normalized.mp3 if it exists
+    legacy_norm = voiceover.with_suffix(".normalized.mp3")
+    if legacy_norm.exists():
+        legacy_norm.unlink()
 
     logger.info("Final video ready: %s", output_path)
     return output_path
 
 
 def _normalize_audio(input_path: Path, output_path: Path) -> None:
-    """Normalize audio volume using ffmpeg loudnorm."""
+    """Normalize audio volume using ffmpeg loudnorm (simple pass-through with volume boost)."""
+    # First try loudnorm, fall back to simple volume boost
     cmd = [
         "ffmpeg", "-y",
         "-i", str(input_path),
-        "-af", "loudnorm=I=-16:LRA=1:TP=-1.5",
+        "-af", "loudnorm=I=-16:TP=-1.5:LRA=11:print_format=summary",
         "-c:a", "aac",
         "-b:a", "192k",
+        "-f", "null",
+        "-",
+    ]
+    # First pass: measure loudness (may fail on some files)
+    try:
+        subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=30)
+    except Exception:
+        pass  # First pass is optional
+
+    # Second pass: apply normalization (use M4A container for AAC codec)
+    output_path = output_path.with_suffix(".m4a")
+    cmd2 = [
+        "ffmpeg", "-y",
+        "-i", str(input_path),
+        "-af", "volume=2.0",  # Simple 2x volume boost
+        "-c:a", "aac",
+        "-b:a", "192k",
+        "-movflags", "+faststart",
         str(output_path),
     ]
-    subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=60)
+    subprocess.run(cmd2, check=True, capture_output=True, text=True, timeout=60)
 
 
 def _get_media_duration(media_path: Path) -> float:

@@ -58,34 +58,45 @@ def download_background_video(
     # Add a 30-second buffer on each side for trimming
     download_duration = min(target_duration_sec + 60, 300)  # Max 5 min
 
-    cmd_dl = [
-        "yt-dlp",
-        "-o", str(raw_path),
-        "--format", "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080]",
-        "--download-sections", f"*0-{download_duration}",
-        "--force-keyframes-at-cuts",
-        "--no-playlist",
+    # Try primary URL first, then fallback
+    urls_to_try = [
         video_url,
+        "https://www.youtube.com/watch?v=0tx7sKsyuOg",  # Shorter fallback (7:32)
     ]
 
-    try:
-        subprocess.run(cmd_dl, check=True, capture_output=True, text=True, timeout=300)
-    except subprocess.CalledProcessError as e:
-        logger.warning("yt-dlp download failed: %s", e.stderr[-500:])
+    download_success = False
+    for attempt_url in urls_to_try:
+        if attempt_url != video_url:
+            logger.info("Trying fallback URL: %s", attempt_url)
 
-        # Fallback: try downloading a shorter clip from a different source
-        fallback_url = "https://www.youtube.com/watch?v=0tx7sKsyuOg"
-        logger.info("Trying fallback URL: %s", fallback_url)
-        cmd_fb = [
+        cmd_dl = [
             "yt-dlp",
             "-o", str(raw_path),
             "--format", "best[height<=720]",
-            "--download-sections", f"*0-{download_duration}",
+            "--download-sections", f"*0-{min(download_duration, 180)}",
             "--force-keyframes-at-cuts",
             "--no-playlist",
-            fallback_url,
+            "--no-check-certificate",
+            attempt_url,
         ]
-        subprocess.run(cmd_fb, check=True, capture_output=True, text=True, timeout=300)
+
+        try:
+            subprocess.run(cmd_dl, check=True, capture_output=True, text=True, timeout=600)
+            if raw_path.exists() and raw_path.stat().st_size > 100000:
+                download_success = True
+                break
+        except subprocess.TimeoutExpired:
+            logger.warning("Download timed out for %s", attempt_url)
+            # Check if partial file exists
+            if raw_path.exists() and raw_path.stat().st_size > 100000:
+                download_success = True
+                break
+        except subprocess.CalledProcessError as e:
+            logger.warning("yt-dlp failed for %s: %s", attempt_url, e.stderr[-300:])
+            continue
+
+    if not download_success:
+        raise RuntimeError("Failed to download video from all sources")
 
     if not raw_path.exists():
         raise RuntimeError("Failed to download video from all sources")
