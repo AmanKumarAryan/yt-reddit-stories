@@ -154,44 +154,43 @@ def download_background_video(
     # ─── Priority 2: Download from YouTube ───────────────────
     logger.warning("No assets found in assets/ folder — downloading from YouTube (quality may be lower)")
     logger.info("To improve quality, pre-download videos into assets/ folder")
-    logger.info("Downloading from: %s", video_url)
     logger.info("Target duration: %.0f seconds", target_duration_sec)
 
     raw_path = output_path.with_suffix(".raw.mp4")
     download_duration = min(target_duration_sec + 60, 300)
 
-    urls_to_try = [
-        video_url,
-        "https://www.youtube.com/watch?v=0tx7sKsyuOg",
+    download_success = False
+
+    cmd_dl = [
+        "yt-dlp",
+        "-o", str(raw_path),
+        "--format", "bestvideo[height<=1080][vcodec^=avc1]+bestaudio[ext=m4a]/best[height<=1080]",
+        "--merge-output-format", "mp4",
+        "--download-sections", f"*0-{min(download_duration, 180)}",
+        "--force-keyframes-at-cuts",
+        "--no-playlist",
+        "--no-check-certificates",
+        "--retries", "10",
+        "--fragment-retries", "10",
+        "--retry-sleep", "5",
+        "--socket-timeout", "30",
+        attempt_url,
     ]
 
-    download_success = False
-    for attempt_url in urls_to_try:
-        if attempt_url != video_url:
-            logger.info("Trying fallback URL: %s", attempt_url)
-
-        cmd_dl = [
-            "yt-dlp",
-            "-o", str(raw_path),
-            "--format", "bestvideo[height<=1080][vcodec^=avc1]+bestaudio[ext=m4a]/best[height<=1080]",
-            "--merge-output-format", "mp4",
-            "--download-sections", f"*0-{min(download_duration, 180)}",
-            "--force-keyframes-at-cuts",
-            "--no-playlist",
-            "--no-check-certificate",
-            attempt_url,
-        ]
-
-        try:
-            subprocess.run(cmd_dl, check=True, capture_output=True, text=True, timeout=600)
-            if raw_path.exists() and raw_path.stat().st_size > 100000:
-                download_success = True
-                break
-        except (subprocess.TimeoutExpired, subprocess.CalledProcessError):
-            if raw_path.exists() and raw_path.stat().st_size > 100000:
-                download_success = True
-                break
-            continue
+    try:
+        result = subprocess.run(cmd_dl, check=True, capture_output=True, text=True, timeout=600)
+        logger.debug("yt-dlp stdout: %s", result.stdout[:500])
+        if raw_path.exists() and raw_path.stat().st_size > 100000:
+            download_success = True
+    except subprocess.TimeoutExpired:
+        logger.warning("yt-dlp timed out — checking partial output")
+        if raw_path.exists() and raw_path.stat().st_size > 100000:
+            download_success = True
+    except subprocess.CalledProcessError as e:
+        logger.error("yt-dlp failed (exit %d): %s", e.returncode, e.stderr[:1000])
+        if raw_path.exists() and raw_path.stat().st_size > 100000:
+            logger.info("Partial download exists despite error — using it")
+            download_success = True
 
     if not download_success:
         raise RuntimeError("Failed to download video from all sources")
