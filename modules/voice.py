@@ -98,27 +98,57 @@ def generate_voiceover(
     output_path = output_path.resolve()
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Concatenate all text into a single block for edge-tts
-    full_text = " ".join(seg["text"] for seg in segments)
-
     logger.info(
-        "Generating TTS for %d segments (%d words) using voice: %s",
+        "Generating TTS for %d segments using voice: %s",
         len(segments),
-        len(full_text.split()),
         TTS_VOICE,
     )
 
-    # Run async TTS
-    asyncio.run(_generate_tts_async(full_text, output_path, TTS_VOICE))
+    # Generate TTS for each segment separately (avoids Azure truncation for long texts)
+    # Then concatenate into a single MP3
+    temp_dir = output_path.parent / f"_tts_segments"
+    temp_dir.mkdir(exist_ok=True)
 
-    # Calculate approximate segment timings based on word proportions
-    # edge-tts doesn't give word timings, so we estimate:
-    # Assume ~150 words/min (~2.5 words/sec)
-    total_words = len(full_text.split())
+    segment_paths = []
+    total_words = 0
+
+    for i, seg in enumerate(segments):
+        seg_text = seg["text"]
+        if not seg_text.strip():
+            continue
+        seg_path = temp_dir / f"seg_{i:04d}.mp3"
+        asyncio.run(_generate_tts_async(seg_text, seg_path, TTS_VOICE))
+        segment_paths.append(seg_path)
+        total_words += len(seg_text.split())
+        logger.debug("  Segment %d/%d: %d words", i + 1, len(segments), len(seg_text.split()))
+
+    if not segment_paths:
+        raise ValueError("No TTS audio generated for any segment!")
+
+    # Concatenate all segment MP3s into final voiceover
+    concat_file = temp_dir / "concat.txt"
+    with open(concat_file, "w") as f:
+        for sp in segment_paths:
+            f.write(f"file '{sp}'\n")
+
+    subprocess.run([
+        "ffmpeg", "-y",
+        "-f", "concat",
+        "-safe", "0",
+        "-i", str(concat_file),
+        "-c", "copy",
+        str(output_path),
+    ], check=True, capture_output=True, text=True, timeout=120)
+
+    # Clean up temp files
+    import shutil
+    shutil.rmtree(temp_dir, ignore_errors=True)
+
     total_audio_sec = _get_audio_duration(output_path)
 
+    # Calculate approximate segment timings based on word proportions
     word_start_times = []
-    word_idx = 0
+    cumulative_words = 0
     for seg in segments:
         seg_words = len(seg["text"].split())
         if total_words > 0:
@@ -126,11 +156,11 @@ def generate_voiceover(
         else:
             seg_duration = 10.0
         word_start_times.append({
-            "start": word_idx,
+            "start": cumulative_words,
             "duration": seg_duration,
             "text": seg["text"],
         })
-        word_idx += seg_words
+        cumulative_words += seg_words
 
     # Save timing metadata
     timing_path = output_path.with_suffix(".timing.json")
@@ -146,10 +176,11 @@ def generate_voiceover(
         )
 
     logger.info(
-        "Voiceover generated: %s (%.1f sec, %d words)",
+        "Voiceover generated: %s (%.1f sec, %d words, %d segments concatenated)",
         output_path,
         total_audio_sec,
         total_words,
+        len(segment_paths),
     )
     return output_path
 

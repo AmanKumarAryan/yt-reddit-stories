@@ -78,6 +78,10 @@ jobs:
           git lfs track "*.mp3"
           git lfs track "*.png"
 
+      - name: Download background assets from playlist
+        run: |
+          bash download_assets.sh 3
+
       - name: Run pipeline
         run: |
           DRY_RUN_FLAG=""
