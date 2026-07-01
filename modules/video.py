@@ -174,7 +174,7 @@ def download_background_video(
         "--fragment-retries", "10",
         "--retry-sleep", "5",
         "--socket-timeout", "30",
-        attempt_url,
+        video_url,
     ]
 
     try:
