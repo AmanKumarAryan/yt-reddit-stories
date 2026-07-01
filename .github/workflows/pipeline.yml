@@ -85,8 +85,8 @@ jobs:
         env:
           COOKIES_B64: ${{ secrets.YOUTUBE_COOKIES }}
         run: >
-          mkdir -p ~/.cache/yt-dlp/youtube &&
-          python3 -c "import os,base64;b64=os.environ['COOKIES_B64'];d=os.path.expanduser('~/.cache/yt-dlp/youtube');os.makedirs(d,exist_ok=True);p=os.path.join(d,'cookies.txt');raw=base64.b64decode(b64);open(p,'wb').write(raw);print(f'Cookies: {os.path.getsize(p)} bytes')"
+          mkdir -p ~/.cache/yt-dlp &&
+          python3 -c "import os,base64;b64=os.environ['COOKIES_B64'];d=os.path.expanduser('~/.cache/yt-dlp');p=os.path.join(d,'cookies.txt');raw=base64.b64decode(b64);open(p,'wb').write(raw);print(f'Cookies: {os.path.getsize(p)} bytes')"
 
       - name: Run pipeline
         run: |

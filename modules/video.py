@@ -9,6 +9,7 @@ Strategy:
 """
 
 import logging
+import os
 import random
 import subprocess
 import tempfile
@@ -161,6 +162,8 @@ def download_background_video(
 
     download_success = False
 
+    cookies_path = os.path.expanduser("~/.cache/yt-dlp/cookies.txt")
+
     cmd_dl = [
         "yt-dlp",
         "-o", str(raw_path),
@@ -171,6 +174,7 @@ def download_background_video(
         "--no-playlist",
         "--no-check-certificates",
         "--force-ipv4",
+        "--cookies", cookies_path,
         "--retries", "10",
         "--fragment-retries", "10",
         "--retry-sleep", "5",
