@@ -170,6 +170,7 @@ def download_background_video(
         "--force-keyframes-at-cuts",
         "--no-playlist",
         "--no-check-certificates",
+        "--force-ipv4",
         "--retries", "10",
         "--fragment-retries", "10",
         "--retry-sleep", "5",

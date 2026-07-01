@@ -78,11 +78,13 @@ jobs:
           git lfs track "*.mp3"
           git lfs track "*.png"
 
-      - name: Download background assets from playlist (optional)
-        continue-on-error: true
-        run: |
-          echo "Trying to download assets from playlist..."
-          bash download_assets.sh 3 2>&1 || echo "Asset download failed — pipeline will use fallback URL"
+      - name: Setup yt-dlp with cookies (bypass YouTube bot detection)
+        uses: AnimMouse/setup-yt-dlp@v3
+
+      - name: Setup yt-dlp YouTube cookies
+        uses: AnimMouse/setup-yt-dlp/cookies@v3
+        with:
+          cookies: ${{ secrets.YOUTUBE_COOKIES }}
 
       - name: Run pipeline
         run: |
