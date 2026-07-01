@@ -78,12 +78,13 @@ jobs:
           git lfs track "*.mp3"
           git lfs track "*.png"
 
-      - name: Install yt-dlp and JS runtime (Deno) for YouTube extraction
-        run: |
-          pip install -U yt-dlp
-          # Deno is the recommended JS runtime for yt-dlp's YouTube challenge solving
-          curl -fsSL https://deno.land/install.sh | sh
-          echo "$HOME/.deno/bin" >> $GITHUB_PATH
+      - name: Install JS runtime (Deno) for yt-dlp YouTube challenge solving
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Upgrade yt-dlp to latest (includes JS challenge solver)
+        run: pip install -U yt-dlp
 
       - name: Run pipeline
         run: |
