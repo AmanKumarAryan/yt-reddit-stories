@@ -78,13 +78,12 @@ jobs:
           git lfs track "*.mp3"
           git lfs track "*.png"
 
-      - name: Install JS runtime (Deno) for yt-dlp YouTube challenge solving
-        uses: denoland/setup-deno@v2
-        with:
-          deno-version: v2.x
-
-      - name: Upgrade yt-dlp to latest (includes JS challenge solver)
-        run: pip install -U yt-dlp
+      - name: Download pre-cached Minecraft background video asset
+        run: |
+          mkdir -p assets
+          curl -fSL -o assets/minecraft_parkour.mp4 \
+            "https://github.com/AmanKumarAryan/yt-reddit-stories/releases/download/assets-v1/minecraft_parkour.mp4"
+          ls -lh assets/
 
       - name: Run pipeline
         run: |
