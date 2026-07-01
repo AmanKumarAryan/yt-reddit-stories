@@ -81,10 +81,11 @@ jobs:
       - name: Setup yt-dlp with cookies (bypass YouTube bot detection)
         uses: AnimMouse/setup-yt-dlp@v3
 
-      - name: Setup yt-dlp YouTube cookies
-        uses: AnimMouse/setup-yt-dlp/cookies@v3
-        with:
-          cookies: ${{ secrets.YOUTUBE_COOKIES }}
+      - name: Write YouTube cookies from secret
+        run: |
+          mkdir -p ~/.cache/yt-dlp/youtube
+          echo "${{ secrets.YOUTUBE_COOKIES }}" | base64 -d > ~/.cache/yt-dlp/youtube/cookies.txt
+          echo "✅ Cookies written ($(wc -c < ~/.cache/yt-dlp/youtube/cookies.txt) bytes)"
 
       - name: Run pipeline
         run: |
