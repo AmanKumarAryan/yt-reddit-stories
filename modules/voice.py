@@ -10,6 +10,7 @@ import asyncio
 import json
 import logging
 import re
+import shutil
 import subprocess
 from pathlib import Path
 from typing import Optional
@@ -141,7 +142,6 @@ def generate_voiceover(
     ], check=True, capture_output=True, text=True, timeout=120)
 
     # Clean up temp files
-    import shutil
     shutil.rmtree(temp_dir, ignore_errors=True)
 
     total_audio_sec = _get_audio_duration(output_path)

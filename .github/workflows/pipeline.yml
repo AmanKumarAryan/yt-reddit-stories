@@ -78,9 +78,11 @@ jobs:
           git lfs track "*.mp3"
           git lfs track "*.png"
 
-      - name: Download background assets from playlist
+      - name: Download background assets from playlist (optional)
+        continue-on-error: true
         run: |
-          bash download_assets.sh 3
+          echo "Trying to download assets from playlist..."
+          bash download_assets.sh 3 2>&1 || echo "Asset download failed — pipeline will use fallback URL"
 
       - name: Run pipeline
         run: |
