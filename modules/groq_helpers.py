@@ -79,54 +79,49 @@ Generate exactly ONE title. No quotes, no extra text.
     return story_title
 
 
-def generate_description(story_body: str, credits: str = "") -> str:
+def generate_description(story_body: str) -> str:
     """
     Generate a YouTube description from the story.
-    Includes narrative hook, credits, and engagement prompts.
+    Clean format: hook + story summary + engagement prompts.
+    No credits, no placeholders, no hashtags, no source links.
     """
-    # Get first ~200 chars as hook
     hook = story_body[:200].strip()
     if len(story_body) > 200:
         hook += "..."
 
     prompt = f"""
 Write a YouTube video description for a narrated Reddit story video.
-Style: Emotional, engaging, authentic.
+Style: Emotional, engaging, authentic, conversational.
 
 Story text: {story_body[:1000]}...
 
-The description should include:
+Write a description with:
 1. A compelling 2-3 sentence hook that summarizes the story
-2. A "Story Source" section linking to the original Reddit post
-3. Video credits
-4. Engagement prompts (subscribe, comment, like)
+2. A brief reflection on the theme (1-2 sentences)
+3. Engagement prompts (subscribe, comment, like)
 
-Keep it under 500 words. Make it natural, not salesy.
+RULES:
+- NO hashtags anywhere
+- NO placeholder text like [narrator], [editor], [reddit link]
+- NO "Story Source" section
+- NO credits section
+- NO video credits
+- NO [name] or [link] style brackets
+- Keep it under 300 words
+- Natural, not salesy or robotic
 """
     result = _call_groq(prompt)
 
     if result:
-        desc = result.strip()
-    else:
-        # Fallback generation
-        desc = (
-            f"{hook}\\n\\n"
-            f"▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\\n"
-            f"📖 Story Source: Reddit\\n\\n"
-            f"This is a narrated version of a personal story shared on Reddit. "
-            f"Names and details may be changed for privacy.\\n\\n"
-            f"▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\\n"
-            f"🎮 Background: Minecraft parkour gameplay\\n\\n"
-            f"▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\\n"
-            f"💬 What did you think? Share your story in the comments.\\n"
-            f"👍 Like if you enjoyed\\n"
-            f"🔔 Subscribe for more Reddit stories\\n"
-        )
+        return result.strip()
 
-    if credits:
-        desc += f"\\n\\nCredits:\\n{credits}"
-
-    return desc
+    return (
+        f"{hook}\\n\\n"
+        f"▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\\n"
+        f"💬 What did you think? Share your story in the comments.\\n"
+        f"👍 Like if this resonated with you\\n"
+        f"🔔 Subscribe for more real stories\\n"
+    )
 
 
 def expand_story_for_youtube(original_title: str, original_body: str, target_minutes: int = 10) -> str:

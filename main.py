@@ -36,7 +36,7 @@ from modules.reddit import (
     mark_used,
 )
 from modules.voice import generate_voiceover
-from modules.video import download_background_video, get_credits_text
+from modules.video import download_background_video
 from modules.groq_helpers import (
     generate_title,
     generate_description,
@@ -168,11 +168,7 @@ def run_pipeline(
     logger.info("Title: %s", title)
 
     # Generate description
-    credits = get_credits_text()
-    description = generate_description(
-        story["body"],
-        credits=credits,
-    )
+    description = generate_description(story["body"])
     logger.info("Description: %d chars", len(description))
 
     # Generate thumbnail prompt + image

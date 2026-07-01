@@ -2,6 +2,9 @@
 .env
 *.env
 
+# Cookies
+cookies.txt
+
 # Secrets
 client_secrets.json
 

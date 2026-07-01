@@ -78,11 +78,11 @@ jobs:
           git lfs track "*.mp3"
           git lfs track "*.png"
 
-      - name: Download pre-cached Minecraft background video asset
+      - name: Download Minecraft background assets
         run: |
           mkdir -p assets
-          curl -fSL -o assets/minecraft_parkour.mp4 \
-            "https://github.com/AmanKumarAryan/yt-reddit-stories/releases/download/assets-v1/minecraft_parkour.mp4"
+          gh release download assets-v1 --dir assets \
+            --repo AmanKumarAryan/yt-reddit-stories
           ls -lh assets/
 
       - name: Run pipeline
