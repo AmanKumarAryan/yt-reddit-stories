@@ -162,8 +162,6 @@ def download_background_video(
 
     download_success = False
 
-    cookies_path = os.path.expanduser("~/.cache/yt-dlp/cookies.txt")
-
     cmd_dl = [
         "yt-dlp",
         "-o", str(raw_path),
@@ -174,13 +172,21 @@ def download_background_video(
         "--no-playlist",
         "--no-check-certificates",
         "--force-ipv4",
-        "--cookies", cookies_path,
         "--retries", "10",
         "--fragment-retries", "10",
         "--retry-sleep", "5",
         "--socket-timeout", "30",
         video_url,
     ]
+
+    # Use cookies file if present (helps with rate limiting but expired cookies can backfire)
+    cookies_path = os.path.expanduser("~/.cache/yt-dlp/cookies.txt")
+    if os.path.exists(cookies_path):
+        cmd_dl.insert(4, cookies_path)
+        cmd_dl.insert(4, "--cookies")
+        logger.info("Using cookies file: %s (%d bytes)", cookies_path, os.path.getsize(cookies_path))
+    else:
+        logger.info("No cookies file found — proceeding without authentication")
 
     try:
         result = subprocess.run(cmd_dl, check=True, capture_output=True, text=True, timeout=600)

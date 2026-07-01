@@ -78,15 +78,12 @@ jobs:
           git lfs track "*.mp3"
           git lfs track "*.png"
 
-      - name: Setup yt-dlp with cookies (bypass YouTube bot detection)
-        uses: AnimMouse/setup-yt-dlp@v3
-
-      - name: Write YouTube cookies from secret
-        env:
-          COOKIES_B64: ${{ secrets.YOUTUBE_COOKIES }}
-        run: >
-          mkdir -p ~/.cache/yt-dlp &&
-          python3 -c "import os,base64;b64=os.environ['COOKIES_B64'];d=os.path.expanduser('~/.cache/yt-dlp');p=os.path.join(d,'cookies.txt');raw=base64.b64decode(b64);open(p,'wb').write(raw);print(f'Cookies: {os.path.getsize(p)} bytes')"
+      - name: Install yt-dlp and JS runtime (Deno) for YouTube extraction
+        run: |
+          pip install -U yt-dlp
+          # Deno is the recommended JS runtime for yt-dlp's YouTube challenge solving
+          curl -fsSL https://deno.land/install.sh | sh
+          echo "$HOME/.deno/bin" >> $GITHUB_PATH
 
       - name: Run pipeline
         run: |
