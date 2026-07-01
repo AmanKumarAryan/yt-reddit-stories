@@ -82,18 +82,11 @@ jobs:
         uses: AnimMouse/setup-yt-dlp@v3
 
       - name: Write YouTube cookies from secret
-        shell: python3
         env:
           COOKIES_B64: ${{ secrets.YOUTUBE_COOKIES }}
-        run: |
-          import os, base64
-          b64 = os.environ['COOKIES_B64']
-          d = os.path.expanduser('~/.cache/yt-dlp/youtube')
-          os.makedirs(d, exist_ok=True)
-          p = os.path.join(d, 'cookies.txt')
-          raw = base64.b64decode(b64).decode('utf-8')
-          open(p, 'w').write(raw)
-          print(f'Cookies: {os.path.getsize(p)} bytes, {len(raw.splitlines())} lines')
+        run: >
+          mkdir -p ~/.cache/yt-dlp/youtube &&
+          python3 -c "import os,base64;b64=os.environ['COOKIES_B64'];d=os.path.expanduser('~/.cache/yt-dlp/youtube');os.makedirs(d,exist_ok=True);p=os.path.join(d,'cookies.txt');raw=base64.b64decode(b64).decode();open(p,'w').write(raw);s=os.path.getsize(p);print(f'Cookies: {s} bytes, {len(raw.splitlines())} lines')"
 
       - name: Run pipeline
         run: |
